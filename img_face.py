@@ -1,8 +1,10 @@
 import cv2 as cv
 import numpy as np
 import mediapipe as mp
+from mediapipe.framework.formats import landmark_pb2
 from scipy.spatial import Delaunay
 import glob
+import sys
 
 # 画像とカメラの準備
 
@@ -26,6 +28,10 @@ pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_t
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
+# コマンドライン引数で--debugや--nofaceがあればフラグを立てる
+show_debug = '--debug' in sys.argv
+no_face_mode = '--noface' in sys.argv
+
 # 顔の特徴点を取得する関数
 def get_face_landmarks(image, face_mesh):
     results = face_mesh.process(image)
@@ -40,23 +46,54 @@ def get_face_landmarks(image, face_mesh):
 lips_inner_idx = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 42, 183]
 
 # 画像から特徴点取得
+def draw_mediapipe_landmarks(img, points, color=(0,255,0)):
+    # points: (N,2) ndarray, img: RGB
+    landmark_list = landmark_pb2.NormalizedLandmarkList()
+    h, w = img.shape[:2]
+    for pt in points:
+        lmk = landmark_pb2.NormalizedLandmark()
+        lmk.x = pt[0] / w
+        lmk.y = pt[1] / h
+        lmk.z = 0
+        landmark_list.landmark.append(lmk)
+    mp.solutions.drawing_utils.draw_landmarks(
+        img,
+        landmark_list,
+        connections=None,
+        landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=color, thickness=2, circle_radius=2),
+        connection_drawing_spec=None
+    )
+
 src_points = get_face_landmarks(src_img, face_mesh)
+debug_img = src_img.copy()
 if src_points is None:
     print("画像から顔の特徴点が検出できません")
-    # 仮配置（画像の色はそのまま）
-    src_h, src_w = src_img.shape[:2]
-    center_x, center_y = src_w // 2, src_h // 2
-    radius_x, radius_y = src_w // 5, src_h // 3
-    src_points = np.array([
-        [int(center_x + radius_x * np.cos(2 * np.pi * i / 468)),
-         int(center_y + radius_y * np.sin(2 * np.pi * i / 468))]
-        for i in range(468)
-    ], np.int32)
+    # samplemarker.npyが存在すれば読み込み、画像中央に平行移動して仮特徴点とする
+    import os
+    if os.path.exists('samplemarker.npy'):
+        marker = np.load('samplemarker.npy')
+        # markerの重心を画像中心に移動
+        center_x, center_y = src_img.shape[1] // 2, src_img.shape[0] // 2
+        marker_center = marker.mean(axis=0).astype(int)
+        shift = np.array([center_x, center_y]) - marker_center
+        src_points = marker + shift
+        print('samplemarker.npyを中央に配置して仮特徴点としました')
+        draw_mediapipe_landmarks(debug_img, src_points, color=(0,255,0))
+    else:
+        print('samplemarker.npyがありません。仮特徴点は表示しません。')
+else:
+    # 検出した特徴点をMediaPipe形式でdebug_imgに描画
+    draw_mediapipe_landmarks(debug_img, src_points, color=(0,0,255))
+# debugウインドウで特徴点付き画像を表示（--debug時のみ）
+if show_debug:
+    cv.imshow('debug', cv.cvtColor(debug_img, cv.COLOR_RGB2BGR))
+    cv.waitKey(500)
 
 # 唇の内側を灰色で塗りつぶす
-lips_poly = src_points[lips_inner_idx]
-gray_color = (128, 128, 128)
-cv.fillPoly(src_img, [lips_poly], gray_color)
+if not no_face_mode:
+    lips_poly = src_points[lips_inner_idx]
+    gray_color = (128, 128, 128)
+    cv.fillPoly(src_img, [lips_poly], gray_color)
 
 # Delaunay三角分割用の三角形インデックスを作成
 tri = Delaunay(src_points)
