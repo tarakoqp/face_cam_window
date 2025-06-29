@@ -13,8 +13,7 @@ MediaPipe と OpenCV を使用しています。
 1. リポジトリをクローン
 
    ```
-   git clone https://github.com/あなたのユーザー名/face_cam.git
-   cd face_cam
+   git clone https://github.com/tarakoqp/face_cam_window.git
    ```
 
 2. 仮想環境の作成・有効化（任意）
