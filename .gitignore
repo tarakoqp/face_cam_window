@@ -11,6 +11,8 @@ dist/
 __pycache__/
 *.pyc
 *.pyo
+*.png
+*.jpg
 
 # VSCode設定
 .vscode/
