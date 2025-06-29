@@ -44,7 +44,3 @@ PyInstaller で exe ファイルを作成できます。
 ```
 python -m PyInstaller --onefile --noconsole --add-data ".venv\Lib\site-packages\mediapipe\modules;mediapipe\modules" main.py
 ```
-
-## ライセンス
-
-MIT License
